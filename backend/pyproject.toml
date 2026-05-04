@@ -2,7 +2,6 @@
 name = "doc-summarizer"
 version = "0.1.0"
 description = "AI-powered document summarizer using Anthropic Claude"
-readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 
