@@ -14,19 +14,44 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 function showToast(message: string, type: 'success' | 'error') {
   if (toastTimer) clearTimeout(toastTimer)
   toast.value = { message, type }
-  toastTimer = setTimeout(() => { toast.value = null }, 4000)
+  toastTimer = setTimeout(() => { toast.value = null }, 5000)
 }
 
 async function handleFiles(files: FileList | null) {
   if (!files?.length) return
+  const fileArray = Array.from(files)
   uploading.value = true
-  try {
-    const summary = await store.uploadFile(files[0])
-    showToast(`"${summary.file_name}" summarized successfully.`, 'success')
-  } catch (e: unknown) {
-    showToast(e instanceof Error ? e.message : 'Upload failed — please try again.', 'error')
-  } finally {
-    uploading.value = false
+
+  let succeeded = 0
+  let failed = 0
+  const errors: string[] = []
+
+  for (const file of fileArray) {
+    try {
+      await store.uploadFile(file)
+      succeeded++
+    } catch (e: unknown) {
+      failed++
+      errors.push(`${file.name}: ${e instanceof Error ? e.message : 'Upload failed'}`)
+    }
+  }
+
+  uploading.value = false
+
+  if (fileArray.length === 1) {
+    if (succeeded === 1) {
+      showToast(`"${fileArray[0].name}" summarized successfully.`, 'success')
+    } else {
+      showToast(errors[0] ?? 'Upload failed — please try again.', 'error')
+    }
+  } else {
+    if (failed === 0) {
+      showToast(`All ${succeeded} files summarized successfully.`, 'success')
+    } else if (succeeded === 0) {
+      showToast(`All ${failed} files failed. ${errors[0]}`, 'error')
+    } else {
+      showToast(`${succeeded} succeeded, ${failed} failed. ${errors[0]}`, 'error')
+    }
   }
 }
 
@@ -50,6 +75,7 @@ function onDrop(e: DragEvent) {
         ref="fileInput"
         type="file"
         :accept="ACCEPTED"
+        multiple
         class="hidden"
         @change="handleFiles(($event.target as HTMLInputElement).files)"
       />
@@ -59,8 +85,8 @@ function onDrop(e: DragEvent) {
       </p>
       <template v-else>
         <p class="text-3xl mb-2">📤</p>
-        <p class="text-sm text-gray-400">Drop a file here or click to browse</p>
-        <p class="text-xs text-gray-600 mt-1">PDF, DOCX, TXT, MD</p>
+        <p class="text-sm text-gray-400">Drop files here or click to browse</p>
+        <p class="text-xs text-gray-600 mt-1">PDF, DOCX, TXT, MD · Multiple files supported</p>
       </template>
     </div>
 

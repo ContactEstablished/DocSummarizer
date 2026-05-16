@@ -26,9 +26,17 @@ export interface SummaryPage {
   page_size: number
 }
 
+export interface ListParams {
+  page?: number
+  page_size?: number
+  sort?: 'created_at' | 'file_name' | 'original_size_bytes'
+  order?: 'asc' | 'desc'
+  file_type?: string
+}
+
 export const summaryApi = {
-  list: (page = 1, pageSize = 20) =>
-    api.get<SummaryPage>('/summaries', { params: { page, page_size: pageSize } }),
+  list: (params: ListParams = {}) =>
+    api.get<SummaryPage>('/summaries', { params: { page: 1, page_size: 20, ...params } }),
 
   get: (id: number) =>
     api.get<Summary>(`/summaries/${id}`),
@@ -43,6 +51,12 @@ export const summaryApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+
+  reSummarize: (id: number) =>
+    api.patch<Summary>(`/summaries/${id}/re-summarize`),
+
+  ask: (id: number, question: string) =>
+    api.post<{ answer: string }>(`/summaries/${id}/ask`, { question }),
 
   search: (q: string, page = 1, pageSize = 20) =>
     api.get<SummaryPage>('/search', { params: { q, page, page_size: pageSize } }),

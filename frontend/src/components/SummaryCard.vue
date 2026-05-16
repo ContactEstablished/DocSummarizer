@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Summary } from '@/api/client'
 
 defineProps<{ summary: Summary }>()
 defineEmits<{ delete: [id: number] }>()
+
+const copied = ref(false)
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -21,6 +24,16 @@ const FILE_ICONS: Record<string, string> = {
   txt: '📝',
   md: '📋',
 }
+
+async function copyShortSummary(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    // Clipboard API not available (non-https, etc.)
+  }
+}
 </script>
 
 <template>
@@ -35,13 +48,22 @@ const FILE_ICONS: Record<string, string> = {
           {{ summary.file_name }}
         </RouterLink>
       </div>
-      <button
-        class="flex-shrink-0 text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-        title="Delete"
-        @click="$emit('delete', summary.id)"
-      >
-        ✕
-      </button>
+      <div class="flex items-center gap-1.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          :title="copied ? 'Copied!' : 'Copy summary'"
+          class="text-gray-600 hover:text-gray-400 transition-colors text-sm"
+          @click.prevent="copyShortSummary(summary.summary_short)"
+        >
+          {{ copied ? '✓' : '⎘' }}
+        </button>
+        <button
+          class="text-gray-600 hover:text-red-400 transition-colors"
+          title="Delete"
+          @click="$emit('delete', summary.id)"
+        >
+          ✕
+        </button>
+      </div>
     </div>
 
     <p class="text-sm text-gray-400 line-clamp-2">{{ summary.summary_short }}</p>
