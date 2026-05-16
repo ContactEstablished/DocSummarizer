@@ -21,6 +21,7 @@ class Summary(Base):
     summary_short: Mapped[str] = mapped_column(Text, nullable=False)
     summary_long: Mapped[str] = mapped_column(Text, nullable=False)
     key_topics: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

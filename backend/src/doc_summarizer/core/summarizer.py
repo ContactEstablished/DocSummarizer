@@ -72,3 +72,34 @@ def summarize_document(text: str) -> dict[str, str | list[str]]:
     except json.JSONDecodeError as exc:
         logger.error("Claude returned non-JSON response: %s", raw[:200])
         raise ValueError("Summarizer returned invalid JSON") from exc
+
+
+_ASK_SYSTEM_PROMPT = """You are a helpful assistant that answers questions about documents.
+You are given a document summary and a user question. Answer the question based on the
+summary content. Be concise but complete. If the summary doesn't contain enough information
+to answer fully, say so clearly."""
+
+
+@retry(
+    retry=retry_if_exception_type(_RETRYABLE),
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    stop=stop_after_attempt(3),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+def _call_ask_api(summary: str, question: str) -> str:
+    message = _client.messages.create(
+        model=settings.model,
+        max_tokens=1024,
+        system=_ASK_SYSTEM_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": f"Document summary:\n{summary}\n\nQuestion: {question}",
+        }],
+    )
+    return message.content[0].text
+
+
+def ask_about_document(summary: str, question: str) -> str:
+    """Ask a question about a document summary. Returns Claude's answer."""
+    return _call_ask_api(summary, question)

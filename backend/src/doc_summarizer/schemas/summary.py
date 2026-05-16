@@ -35,3 +35,11 @@ class SummaryPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class AskRequest(BaseModel):
+    question: str
+
+
+class AskResponse(BaseModel):
+    answer: str
