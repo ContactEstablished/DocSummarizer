@@ -90,6 +90,9 @@ async def upload_file(
 
     try:
         text = parse_document(tmp_path)
+    except Exception as exc:
+        logger.exception("Failed to parse %s", file.filename)
+        raise HTTPException(status_code=422, detail=f"Could not parse document: {exc}") from exc
     finally:
         os.unlink(tmp_path)
 
@@ -97,7 +100,14 @@ async def upload_file(
         raise HTTPException(status_code=422, detail="Could not extract text from the document")
 
     logger.info("Summarizing %s (%d bytes)…", file.filename, len(contents))
-    result = summarize_document(text)
+    try:
+        result = summarize_document(text)
+    except ValueError as exc:
+        # Claude returned non-JSON
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Anthropic API error for %s", file.filename)
+        raise HTTPException(status_code=502, detail=f"Summarization failed: {exc}") from exc
 
     summary = Summary(
         file_path=file.filename or "upload",

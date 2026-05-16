@@ -23,9 +23,10 @@ _SYSTEM_PROMPT = """You are a document summarization assistant. Given document t
 
 Respond with only the JSON object — no markdown, no explanation."""
 
+# Only retry on transient errors — never on auth/permission failures
 _RETRYABLE = (
     anthropic.RateLimitError,
-    anthropic.APIStatusError,
+    anthropic.InternalServerError,
     anthropic.APIConnectionError,
     anthropic.APITimeoutError,
 )

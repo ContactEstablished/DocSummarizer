@@ -1,0 +1,19 @@
+# Files Claude Code should never read
+# Matches the same syntax as .gitignore
+
+# Environment files — contain API keys and secrets
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# Database — may contain user data
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+backend/logs/
+*.log
