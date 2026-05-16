@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { summaryApi, type Summary } from '@/api/client'
 import { useSummaryStore } from '@/stores/summaries'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -11,6 +12,7 @@ const store = useSummaryStore()
 const summary = ref<Summary | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const showDeleteModal = ref(false)
 
 onMounted(async () => {
   try {
@@ -23,12 +25,10 @@ onMounted(async () => {
   }
 })
 
-async function onDelete() {
+async function confirmDelete() {
   if (!summary.value) return
-  if (confirm('Delete this summary?')) {
-    await store.deleteSummary(summary.value.id)
-    router.push('/')
-  }
+  await store.deleteSummary(summary.value.id)
+  router.push('/')
 }
 
 function formatDate(iso: string) {
@@ -59,7 +59,10 @@ function formatBytes(bytes: number) {
     <article v-else-if="summary" class="space-y-6 max-w-3xl">
       <div class="flex items-start justify-between gap-4">
         <h1 class="text-2xl font-bold text-gray-100 break-all">{{ summary.file_name }}</h1>
-        <button class="btn-ghost text-red-500 hover:text-red-400 flex-shrink-0" @click="onDelete">
+        <button
+          class="btn-ghost text-red-500 hover:text-red-400 flex-shrink-0"
+          @click="showDeleteModal = true"
+        >
           Delete
         </button>
       </div>
@@ -101,4 +104,12 @@ function formatBytes(bytes: number) {
       </section>
     </article>
   </div>
+
+  <ConfirmModal
+    v-if="showDeleteModal"
+    :title="`Delete &quot;${summary?.file_name}&quot;?`"
+    message="This summary will be permanently deleted and cannot be recovered."
+    @confirm="confirmDelete"
+    @cancel="showDeleteModal = false"
+  />
 </template>

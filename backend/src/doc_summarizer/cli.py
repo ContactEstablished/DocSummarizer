@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 @click.option("--log-level", default=settings.log_level, help="Logging level")
 def cli(log_level: str) -> None:
     """DocSummarizer — AI-powered document summarization tool."""
-    logging.basicConfig(level=log_level.upper(), format="%(asctime)s %(levelname)s %(name)s — %(message)s")
+    import os
+    os.environ.setdefault("LOG_LEVEL", log_level.upper())
+    from doc_summarizer.logging_config import configure_logging
+    configure_logging()
 
 
 @cli.command()

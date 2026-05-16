@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useSummaryStore } from '@/stores/summaries'
 import SummaryCard from '@/components/SummaryCard.vue'
 import FileUpload from '@/components/FileUpload.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const store = useSummaryStore()
+const pendingDeleteId = ref<number | null>(null)
 
 onMounted(() => store.fetchPage())
 
-async function onDelete(id: number) {
-  if (confirm('Delete this summary?')) {
-    await store.deleteSummary(id)
-  }
+function requestDelete(id: number) {
+  pendingDeleteId.value = id
+}
+
+async function confirmDelete() {
+  if (pendingDeleteId.value === null) return
+  await store.deleteSummary(pendingDeleteId.value)
+  pendingDeleteId.value = null
 }
 </script>
 
@@ -20,7 +26,9 @@ async function onDelete(id: number) {
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-2xl font-bold text-gray-100">Document Library</h1>
-        <p class="text-sm text-gray-500 mt-1">{{ store.total }} document{{ store.total !== 1 ? 's' : '' }} summarized</p>
+        <p class="text-sm text-gray-500 mt-1">
+          {{ store.total }} document{{ store.total !== 1 ? 's' : '' }} summarized
+        </p>
       </div>
     </div>
 
@@ -47,7 +55,7 @@ async function onDelete(id: number) {
         v-for="summary in store.items"
         :key="summary.id"
         :summary="summary"
-        @delete="onDelete"
+        @delete="requestDelete"
       />
     </div>
 
@@ -65,4 +73,11 @@ async function onDelete(id: number) {
       >Next →</button>
     </div>
   </div>
+
+  <ConfirmModal
+    v-if="pendingDeleteId !== null"
+    message="This summary will be permanently deleted and cannot be recovered."
+    @confirm="confirmDelete"
+    @cancel="pendingDeleteId = null"
+  />
 </template>

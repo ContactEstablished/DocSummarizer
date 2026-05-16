@@ -8,8 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from doc_summarizer.api.routes import health, search, summaries
 from doc_summarizer.config import settings
 from doc_summarizer.db.session import init_db
+from doc_summarizer.logging_config import configure_logging
 
-logging.basicConfig(level=settings.log_level)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
