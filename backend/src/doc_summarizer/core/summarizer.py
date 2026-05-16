@@ -49,12 +49,26 @@ def _call_api(text: str) -> str:
     return message.content[0].text
 
 
+def _strip_markdown_fences(text: str) -> str:
+    """Remove ```json ... ``` or ``` ... ``` wrappers Claude sometimes adds."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        # Drop the opening fence line and the closing fence
+        lines = stripped.splitlines()
+        inner = lines[1:] if lines[0].startswith("```") else lines
+        if inner and inner[-1].strip() == "```":
+            inner = inner[:-1]
+        return "\n".join(inner).strip()
+    return stripped
+
+
 def summarize_document(text: str) -> dict[str, str | list[str]]:
     """Call Claude to produce a structured summary. Retries up to 4 times on
     rate-limit and transient API errors with exponential backoff (2s → 60s)."""
     raw = _call_api(text)
+    cleaned = _strip_markdown_fences(raw)
     try:
-        return json.loads(raw)
+        return json.loads(cleaned)
     except json.JSONDecodeError as exc:
         logger.error("Claude returned non-JSON response: %s", raw[:200])
         raise ValueError("Summarizer returned invalid JSON") from exc
