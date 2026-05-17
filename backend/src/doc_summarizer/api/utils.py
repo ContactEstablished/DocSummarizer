@@ -15,6 +15,7 @@ def to_response(summary: Summary) -> SummaryResponse:
         summary_short=summary.summary_short,
         summary_long=summary.summary_long,
         key_topics=json.loads(summary.key_topics),
+        is_starred=summary.is_starred,
         created_at=summary.created_at,
         updated_at=summary.updated_at,
     )

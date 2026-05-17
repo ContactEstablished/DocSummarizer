@@ -114,7 +114,7 @@ async def test_upload_duplicate_returns_cached(client: AsyncClient):
     content = b"Unique document content that will be hashed for dedup testing."
     call_count = 0
 
-    def counting_mock(text: str) -> str:
+    def counting_mock(text: str, system: str = "") -> str:
         nonlocal call_count
         call_count += 1
         return '{"summary_short":"Short.","summary_long":"Long.","key_topics":["dup"]}'

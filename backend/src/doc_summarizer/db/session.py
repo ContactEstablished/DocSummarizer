@@ -62,12 +62,16 @@ async def init_db() -> None:
         # Create ORM tables
         await conn.run_sync(Base.metadata.create_all)
 
-        # Non-destructive migration: add extracted_text column to existing databases
-        try:
-            await conn.execute(text("ALTER TABLE summaries ADD COLUMN extracted_text TEXT"))
-            logger.info("Migration: added extracted_text column to summaries table")
-        except Exception:
-            pass  # Column already exists — expected on subsequent starts
+        # Non-destructive migrations for existing databases
+        for col_sql, col_name in [
+            ("ALTER TABLE summaries ADD COLUMN extracted_text TEXT", "extracted_text"),
+            ("ALTER TABLE summaries ADD COLUMN is_starred BOOLEAN NOT NULL DEFAULT 0", "is_starred"),
+        ]:
+            try:
+                await conn.execute(text(col_sql))
+                logger.info("Migration: added %s column to summaries table", col_name)
+            except Exception:
+                pass  # Column already exists — expected on subsequent starts
 
         # Set up FTS5 virtual table and sync triggers
         for ddl in _FTS_DDL:

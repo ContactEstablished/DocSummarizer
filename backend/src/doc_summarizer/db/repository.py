@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from doc_summarizer.db.models import Summary
@@ -23,6 +23,8 @@ class SummaryRepository:
         sort: str = "created_at",
         order: str = "desc",
         file_type: str | None = None,
+        topic: str | None = None,
+        starred_only: bool = False,
     ) -> tuple[list[Summary], int]:
         offset = (page - 1) * page_size
         col = _SORT_COLS.get(sort, Summary.created_at)
@@ -31,12 +33,20 @@ class SummaryRepository:
         conditions = []
         if file_type:
             conditions.append(Summary.file_type == file_type)
+        if topic:
+            # Match topic inside JSON array — the quotes prevent partial matches
+            conditions.append(Summary.key_topics.ilike(f'%"{topic}"%'))
+        if starred_only:
+            conditions.append(Summary.is_starred == True)  # noqa: E712
 
-        items_q = select(Summary).order_by(order_clause).offset(offset).limit(page_size)
+        items_q = select(Summary).offset(offset).limit(page_size)
         count_q = select(func.count()).select_from(Summary)
         if conditions:
             items_q = items_q.where(*conditions)
             count_q = count_q.where(*conditions)
+
+        # Starred documents sort to the top, then by the user's chosen order
+        items_q = items_q.order_by(Summary.is_starred.desc(), order_clause)
 
         items_result = await self.session.execute(items_q)
         items = list(items_result.scalars())
@@ -75,9 +85,28 @@ class SummaryRepository:
         await self.session.refresh(summary)
         return summary
 
+    async def toggle_star(self, summary: Summary) -> Summary:
+        """Toggle the is_starred flag and return the updated summary."""
+        summary.is_starred = not summary.is_starred
+        await self.session.commit()
+        await self.session.refresh(summary)
+        return summary
+
     async def delete(self, summary: Summary) -> None:
         await self.session.delete(summary)
         await self.session.commit()
+
+    async def get_topics(self) -> list[tuple[str, int]]:
+        """Return unique topics across all summaries with document counts.
+        Uses SQLite json_each() to explode the JSON key_topics arrays."""
+        result = await self.session.execute(
+            text(
+                "SELECT value AS topic, COUNT(*) AS cnt "
+                "FROM summaries, json_each(summaries.key_topics) "
+                "GROUP BY value ORDER BY cnt DESC, value ASC"
+            )
+        )
+        return [(row[0], row[1]) for row in result]
 
     async def search(self, query: str, page: int = 1, page_size: int = 20) -> tuple[list[Summary], int]:
         """Full-text search using FTS5, ranked by BM25 relevance.
@@ -91,8 +120,7 @@ class SummaryRepository:
     async def _search_fts5(
         self, query: str, page_size: int, offset: int
     ) -> tuple[list[Summary], int]:
-        """BM25-ranked FTS5 search. Returns IDs in relevance order, then fetches ORM objects."""
-        # Wrap in double-quotes for phrase search; escape existing quotes
+        """BM25-ranked FTS5 search."""
         safe_q = query.strip().replace('"', '""')
         match_expr = f'"{safe_q}"' if " " in safe_q else safe_q + "*"
 
@@ -114,7 +142,6 @@ class SummaryRepository:
         if not ids:
             return [], total
 
-        # Fetch ORM objects, preserving relevance order
         orm_result = await self.session.execute(select(Summary).where(Summary.id.in_(ids)))
         by_id = {s.id: s for s in orm_result.scalars()}
         items = [by_id[i] for i in ids if i in by_id]

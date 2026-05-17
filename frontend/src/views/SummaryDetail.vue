@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { summaryApi, type Summary } from '@/api/client'
+import { summaryApi, type Summary, type TemplateInfo } from '@/api/client'
 import { useSummaryStore } from '@/stores/summaries'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 
@@ -17,15 +17,19 @@ const showDeleteModal = ref(false)
 // Re-summarize state
 const reSummarizing = ref(false)
 const reSummarizeError = ref<string | null>(null)
+const reSummarizeTemplate = ref('default')
 
 // Copy state
 const copiedField = ref<string | null>(null)
 
-// Q&A state
+// Q&A state (streaming)
 const question = ref('')
 const answer = ref<string | null>(null)
 const askLoading = ref(false)
 const askError = ref<string | null>(null)
+
+// Templates
+const templates = ref<TemplateInfo[]>([])
 
 onMounted(async () => {
   try {
@@ -36,6 +40,13 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  // Load templates for re-summarize picker
+  try {
+    const { data } = await summaryApi.templates()
+    templates.value = data
+  } catch {
+    // Non-critical
+  }
 })
 
 async function confirmDelete() {
@@ -44,12 +55,19 @@ async function confirmDelete() {
   router.push('/')
 }
 
+async function toggleStar() {
+  if (!summary.value) return
+  const updated = await store.toggleStar(summary.value.id)
+  summary.value = updated
+}
+
 async function reSummarize() {
   if (!summary.value) return
   reSummarizing.value = true
   reSummarizeError.value = null
   try {
-    const updated = await store.reSummarize(summary.value.id)
+    const template = reSummarizeTemplate.value !== 'default' ? reSummarizeTemplate.value : undefined
+    const updated = await store.reSummarize(summary.value.id, template)
     summary.value = updated
   } catch (e: unknown) {
     reSummarizeError.value = e instanceof Error ? e.message : 'Re-summarization failed'
@@ -101,10 +119,44 @@ async function submitQuestion() {
   if (!summary.value || !question.value.trim()) return
   askLoading.value = true
   askError.value = null
-  answer.value = null
+  answer.value = ''
+
   try {
-    const { data } = await summaryApi.ask(summary.value.id, question.value.trim())
-    answer.value = data.answer
+    const url = summaryApi.askStreamUrl(summary.value.id)
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question.value.trim() }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`)
+    }
+
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const text = decoder.decode(value, { stream: true })
+      for (const line of text.split('\n')) {
+        if (!line.startsWith('data: ')) continue
+        const payload = line.slice(6)
+        if (payload === '[DONE]') continue
+        try {
+          const data = JSON.parse(payload)
+          if (data.error) {
+            askError.value = data.error
+          } else if (data.text) {
+            answer.value += data.text
+          }
+        } catch {
+          // Incomplete JSON chunk — ignore
+        }
+      }
+    }
   } catch (e: unknown) {
     askError.value = e instanceof Error ? e.message : 'Failed to get an answer'
   } finally {
@@ -140,7 +192,14 @@ function formatBytes(bytes: number) {
     <article v-else-if="summary" class="space-y-6 max-w-3xl">
       <!-- Header -->
       <div class="flex items-start justify-between gap-4">
-        <h1 class="text-2xl font-bold text-gray-100 break-all">{{ summary.file_name }}</h1>
+        <div class="flex items-center gap-2 min-w-0">
+          <button
+            class="text-xl transition-transform hover:scale-110 flex-shrink-0"
+            :title="summary.is_starred ? 'Unstar' : 'Star'"
+            @click="toggleStar"
+          >{{ summary.is_starred ? '★' : '☆' }}</button>
+          <h1 class="text-2xl font-bold text-gray-100 break-all">{{ summary.file_name }}</h1>
+        </div>
         <div class="flex items-center gap-2 flex-shrink-0">
           <button
             class="btn-ghost text-xs"
@@ -194,24 +253,33 @@ function formatBytes(bytes: number) {
 
       <!-- Re-summarize -->
       <section class="border-t border-gray-800 pt-4">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-4">
           <div>
             <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Re-summarize</h2>
             <p class="text-xs text-gray-600 mt-0.5">Run Claude again on the same document text to get a fresh summary.</p>
           </div>
-          <button
-            class="btn-ghost text-xs flex-shrink-0"
-            :disabled="reSummarizing"
-            @click="reSummarize"
-          >
-            <span v-if="reSummarizing" class="animate-pulse">Running…</span>
-            <span v-else>↻ Re-summarize</span>
-          </button>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <select
+              v-if="templates.length"
+              v-model="reSummarizeTemplate"
+              class="input py-1 text-xs"
+            >
+              <option v-for="t in templates" :key="t.key" :value="t.key">{{ t.label }}</option>
+            </select>
+            <button
+              class="btn-ghost text-xs"
+              :disabled="reSummarizing"
+              @click="reSummarize"
+            >
+              <span v-if="reSummarizing" class="animate-pulse">Running…</span>
+              <span v-else>↻ Re-summarize</span>
+            </button>
+          </div>
         </div>
         <p v-if="reSummarizeError" class="mt-2 text-xs text-red-400">{{ reSummarizeError }}</p>
       </section>
 
-      <!-- Ask a Question -->
+      <!-- Ask a Question (streaming) -->
       <section class="border-t border-gray-800 pt-4 space-y-3">
         <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wide">Ask a Question</h2>
         <p class="text-xs text-gray-600">Ask Claude anything about this document based on its summary.</p>
@@ -239,9 +307,9 @@ function formatBytes(bytes: number) {
           enter-to-class="opacity-100 translate-y-0"
         >
           <div
-            v-if="answer"
+            v-if="answer !== null && answer !== ''"
             class="bg-gray-800/60 border border-gray-700/50 rounded-lg p-4 text-sm text-gray-300 leading-relaxed whitespace-pre-wrap"
-          >{{ answer }}</div>
+          >{{ answer }}<span v-if="askLoading" class="inline-block w-1.5 h-4 bg-brand-400 animate-pulse ml-0.5 align-text-bottom" /></div>
         </Transition>
       </section>
 

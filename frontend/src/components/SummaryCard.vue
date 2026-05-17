@@ -3,8 +3,8 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { Summary } from '@/api/client'
 
-defineProps<{ summary: Summary }>()
-defineEmits<{ delete: [id: number] }>()
+const props = defineProps<{ summary: Summary }>()
+defineEmits<{ delete: [id: number]; star: [id: number] }>()
 
 const copied = ref(false)
 
@@ -40,7 +40,11 @@ async function copyShortSummary(text: string) {
   <article class="card flex flex-col gap-3 group">
     <div class="flex items-start justify-between gap-3">
       <div class="flex items-center gap-2 min-w-0">
-        <span class="text-xl flex-shrink-0">{{ FILE_ICONS[summary.file_type] ?? '📄' }}</span>
+        <button
+          :title="summary.is_starred ? 'Unstar' : 'Star'"
+          class="text-lg flex-shrink-0 transition-transform hover:scale-110"
+          @click="$emit('star', summary.id)"
+        >{{ summary.is_starred ? '★' : '☆' }}</button>
         <RouterLink
           :to="`/summary/${summary.id}`"
           class="font-medium text-gray-100 hover:text-brand-400 truncate transition-colors"
