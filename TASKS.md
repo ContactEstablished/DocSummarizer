@@ -133,6 +133,22 @@ Everything below is committed and on `main`.
 
 ---
 
+## Remaining Work — Sprint 3
+
+### 🔴 High Value
+
+- [ ] **Streaming Q&A** — Switch the `POST /api/summaries/{id}/ask` endpoint to use `anthropic.stream()` and return a `StreamingResponse` from FastAPI. On the frontend, use `fetch()` with a `ReadableStream` reader to display the answer word-by-word as it arrives in the "Ask a question" panel on the detail page. Much more engaging than waiting for the full response.
+
+- [ ] **Custom prompt templates** — Let the user pick a summary style before uploading. Define 4–5 built-in templates (*Executive Brief*, *Bullet Points*, *Technical Deep Dive*, *Simple / ELI5*) and an *Edit* mode where they can write their own system prompt. Store the selected template in `localStorage`. Send it as an optional `prompt_template` field in the upload request body; the backend uses it in place of the default `_SYSTEM_PROMPT` in `summarizer.py`.
+
+- [ ] **Topic tag cloud + filter** — On the library page, add a tag cloud panel above the grid that lists every unique `key_topic` across all summaries with a document count badge. Clicking a tag filters the grid to documents containing that topic. Backend: new `GET /api/topics` endpoint that returns `{topic: str, count: int}[]` (a single aggregate query with `json_each` over the `key_topics` column). Frontend: clickable badge chips that set a `topicFilter` in the store and pass it as a query param to `GET /api/summaries`.
+
+- [ ] **Starred / pinned documents** — Add a boolean `is_starred` column to the `Summary` model (auto-migrate in `init_db()` with `ALTER TABLE`). New `PATCH /api/summaries/{id}/star` endpoint that toggles the value. On the library page, show a ★ icon on each card; starred cards render with a gold star and sort to the top regardless of the current sort setting. Add a "Starred only" toggle to the filter toolbar.
+
+- [ ] **OCR fallback for image PDFs** — In `core/parsers/pdf_parser.py`, after `pypdf` extracts text, check if `text.strip()` is empty. If so, attempt OCR using `pdf2image` (to render pages as images) and `pytesseract` (to extract text). Add `pdf2image` and `pytesseract` to `pyproject.toml` dependencies; document that Tesseract must be installed on the host (`winget install UB-Mannheim.TesseractOCR` on Windows, `apt-get install tesseract-ocr` on Linux). Wrap the OCR attempt in a `try/except` so a missing Tesseract install degrades gracefully (logs a warning, returns empty string as before).
+
+---
+
 ## Notes for Claude Code
 
 - Python 3.11+ syntax throughout — use `X | Y` unions, `match` where appropriate

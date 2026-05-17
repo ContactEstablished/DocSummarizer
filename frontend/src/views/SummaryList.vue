@@ -8,12 +8,17 @@ import ConfirmModal from '@/components/ConfirmModal.vue'
 const store = useSummaryStore()
 const pendingDeleteId = ref<number | null>(null)
 
-onMounted(() => store.fetchPage())
+onMounted(() => {
+  store.fetchPage()
+  store.fetchTopics()
+  store.fetchTemplates()
+})
 
 // Re-fetch when sort/filter changes (reset to page 1)
-watch([() => store.sort, () => store.order, () => store.fileTypeFilter], () => {
-  store.fetchPage(1)
-})
+watch(
+  [() => store.sort, () => store.order, () => store.fileTypeFilter, () => store.topicFilter, () => store.starredOnly],
+  () => store.fetchPage(1),
+)
 
 function requestDelete(id: number) {
   pendingDeleteId.value = id
@@ -23,6 +28,15 @@ async function confirmDelete() {
   if (pendingDeleteId.value === null) return
   await store.deleteSummary(pendingDeleteId.value)
   pendingDeleteId.value = null
+  store.fetchTopics() // refresh topic counts after delete
+}
+
+async function handleStar(id: number) {
+  await store.toggleStar(id)
+}
+
+function selectTopic(topic: string) {
+  store.topicFilter = store.topicFilter === topic ? '' : topic
 }
 </script>
 
@@ -37,7 +51,39 @@ async function confirmDelete() {
       </div>
     </div>
 
-    <FileUpload />
+    <!-- Prompt template picker + upload zone -->
+    <div class="space-y-3">
+      <div v-if="store.templates.length" class="flex items-center gap-2">
+        <label class="text-gray-500 text-xs uppercase tracking-wide">Summary style</label>
+        <select
+          :value="store.selectedTemplate"
+          class="input py-1 text-sm"
+          @change="store.setTemplate(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="t in store.templates" :key="t.key" :value="t.key">{{ t.label }}</option>
+        </select>
+        <span class="text-xs text-gray-600">
+          {{ store.templates.find(t => t.key === store.selectedTemplate)?.description }}
+        </span>
+      </div>
+      <FileUpload />
+    </div>
+
+    <!-- Topic tag cloud -->
+    <div v-if="store.topics.length" class="flex flex-wrap gap-1.5">
+      <button
+        v-for="tc in store.topics"
+        :key="tc.topic"
+        class="badge cursor-pointer transition-all"
+        :class="store.topicFilter === tc.topic
+          ? 'ring-2 ring-brand-500 bg-brand-900/30 text-brand-300'
+          : 'hover:ring-1 hover:ring-gray-600'"
+        @click="selectTopic(tc.topic)"
+      >
+        {{ tc.topic }}
+        <span class="ml-1 text-[10px] opacity-60">{{ tc.count }}</span>
+      </button>
+    </div>
 
     <!-- Sort & filter toolbar -->
     <div class="flex flex-wrap items-center gap-3 text-sm">
@@ -80,6 +126,18 @@ async function confirmDelete() {
         <span>{{ store.order === 'desc' ? '↓' : '↑' }}</span>
         <span>{{ store.order === 'desc' ? 'Newest first' : 'Oldest first' }}</span>
       </button>
+
+      <div class="w-px h-4 bg-gray-700" />
+
+      <!-- Starred only toggle -->
+      <button
+        class="btn-ghost py-1 px-2 text-xs flex items-center gap-1"
+        :class="store.starredOnly ? 'text-yellow-400' : ''"
+        @click="store.starredOnly = !store.starredOnly"
+      >
+        <span>{{ store.starredOnly ? '★' : '☆' }}</span>
+        <span>{{ store.starredOnly ? 'Starred' : 'All docs' }}</span>
+      </button>
     </div>
 
     <div v-if="store.loading" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -104,6 +162,7 @@ async function confirmDelete() {
         :key="summary.id"
         :summary="summary"
         @delete="requestDelete"
+        @star="handleStar"
       />
     </div>
 

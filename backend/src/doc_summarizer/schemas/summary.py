@@ -13,6 +13,7 @@ class SummaryResponse(BaseModel):
     summary_short: str
     summary_long: str
     key_topics: list[str]
+    is_starred: bool
     created_at: datetime
     updated_at: datetime
 
@@ -43,3 +44,14 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     answer: str
+
+
+class TopicCount(BaseModel):
+    topic: str
+    count: int
+
+
+class TemplateInfo(BaseModel):
+    key: str
+    label: str
+    description: str

@@ -15,6 +15,7 @@ export interface Summary {
   summary_short: string
   summary_long: string
   key_topics: string[]
+  is_starred: boolean
   created_at: string
   updated_at: string
 }
@@ -32,6 +33,19 @@ export interface ListParams {
   sort?: 'created_at' | 'file_name' | 'original_size_bytes'
   order?: 'asc' | 'desc'
   file_type?: string
+  topic?: string
+  starred_only?: boolean
+}
+
+export interface TopicCount {
+  topic: string
+  count: number
+}
+
+export interface TemplateInfo {
+  key: string
+  label: string
+  description: string
 }
 
 export const summaryApi = {
@@ -44,19 +58,35 @@ export const summaryApi = {
   delete: (id: number) =>
     api.delete(`/summaries/${id}`),
 
-  upload: (file: File) => {
+  upload: (file: File, promptTemplate?: string) => {
     const form = new FormData()
     form.append('file', file)
+    if (promptTemplate) form.append('prompt_template', promptTemplate)
     return api.post<Summary>('/summaries/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
 
-  reSummarize: (id: number) =>
-    api.patch<Summary>(`/summaries/${id}/re-summarize`),
+  reSummarize: (id: number, promptTemplate?: string) =>
+    api.patch<Summary>(`/summaries/${id}/re-summarize`, null, {
+      params: promptTemplate ? { prompt_template: promptTemplate } : undefined,
+    }),
+
+  toggleStar: (id: number) =>
+    api.patch<Summary>(`/summaries/${id}/star`),
 
   ask: (id: number, question: string) =>
     api.post<{ answer: string }>(`/summaries/${id}/ask`, { question }),
+
+  // Returns the base URL for building the streaming fetch URL
+  askStreamUrl: (id: number) =>
+    `${api.defaults.baseURL}/summaries/${id}/ask/stream`,
+
+  topics: () =>
+    api.get<TopicCount[]>('/summaries/topics'),
+
+  templates: () =>
+    api.get<TemplateInfo[]>('/summaries/templates'),
 
   search: (q: string, page = 1, pageSize = 20) =>
     api.get<SummaryPage>('/search', { params: { q, page, page_size: pageSize } }),
